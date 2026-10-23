@@ -17,7 +17,7 @@ from xml.sax.saxutils import escape
 import openpyxl
 
 _ROW_FORMULA = re.compile(
-    r'<c r="D(\d+)" s="(\d+)"><f>(IF\(AND\(ISNUMBER\(B\1\),.*?)</f><v ?/></c>')
+    r'<c r="E(\d+)" s="(\d+)"><f>(IF\(AND\(ISNUMBER\(C\1\),.*?)</f><v ?/></c>')
 _FORMULA_CELL = re.compile(r'<c r="([A-Z]+)(\d+)"( s="\d+")?><f( t="shared"[^>/]*)?(?:/>|>(.*?)</f>)(?:<v ?/>)?</c>')
 
 
@@ -30,9 +30,9 @@ def _share_row_formulas(xml):
     def repl(m):
         r, s, formula = int(m.group(1)), m.group(2), m.group(3)
         if r == first:
-            return (f'<c r="D{r}" s="{s}"><f t="shared" ref="D{first}:D{last}" si="0">'
+            return (f'<c r="E{r}" s="{s}"><f t="shared" ref="E{first}:E{last}" si="0">'
                     f'{formula}</f></c>')
-        return f'<c r="D{r}" s="{s}"><f t="shared" si="0"/></c>'
+        return f'<c r="E{r}" s="{s}"><f t="shared" si="0"/></c>'
 
     return _ROW_FORMULA.sub(repl, xml)
 
@@ -130,7 +130,7 @@ def compact(src, dst, recalculated=None):
                     'officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>'
                 ).encode("utf-8")
             if item.filename.startswith("xl/worksheets/sheet") and item.filename.endswith(".xml"):
-                xml = data.decode("utf-8")
+                xml = data.decode("utf-8").replace("<v></v>", "<v/>")   # openpyxl 3.1 writes empty values long-hand
                 xml = _to_shared_strings(xml, strings)
                 xml = _tidy(_share_row_formulas(xml))
                 if recalculated:
