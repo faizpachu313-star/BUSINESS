@@ -32,12 +32,7 @@ workbook, so it lands on that day's record:
 
 ## After filing
 
-1. `python daily.py export <scratch dir>` writes `patients.csv`, `radiology.csv`, `undi.csv`,
-   `travels.csv`.
-2. Refresh the dashboard https://claude.ai/artifact/U3PwzpXXUvBbEEikf2xNAs (Dashboard type): upload each
-   file as an asset (Artifact publish, `asset: true`), then `update` `datasets/<section>` in its store
-   with the new `source.url`, `source.name` and `updated: {at, by: "Claude"}`.
-3. Commit the `data/` and `output/` changes and push.
+Commit the `data/` and `output/` changes and push.
 
 ## Privacy
 

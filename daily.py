@@ -21,10 +21,8 @@ Undi profit (AED received x rate - INR given) and every total are Excel formulas
     python daily.py show [--date D]                    # a day's records in every section
     python daily.py remove SECTION --date D --number N # N = the entry's number that day (1 = first)
     python daily.py build [SECTION ...]                # rebuild workbooks from the data files
-    python daily.py export DIR                         # rows for the dashboard: one CSV per section
 """
 import argparse
-import csv
 import glob
 import json
 import os
@@ -51,8 +49,6 @@ ALIASES = {"received": "aed", "aed_received": "aed", "given": "inr", "inr_given"
 # ``add`` flags; each goes through the same names as a --json key
 FLAGS = ("file-no", "name", "patient", "consultation", "services", "service",
          "rate", "received", "given", "bill", "charged")
-# dashboard column names, where they differ from the stored key (the dashboard page reads these names)
-EXPORT_NAMES = {"undi": {"aed": "aed_received", "inr": "inr_given"}}
 
 
 def today():
@@ -238,38 +234,6 @@ def show(day, sections):
             print(f"    {i}. " + " | ".join("" if e.get(f) is None else str(e.get(f)) for f in fields))
 
 
-def cmd_export(args):
-    """Every entry as dashboard rows: id (date#n), date, then the section's fields.
-
-    CSV rather than JSON: a CSV's header names the columns even before the first entry,
-    and the dashboard reads a file with no rows only when it knows its columns.
-    """
-    os.makedirs(args.dir, exist_ok=True)
-    for section, (_, fields, _, _) in FIELDS.items():
-        names = EXPORT_NAMES.get(section, {})
-        rows = []
-        for year in years_with_data(section):
-            if section == "undi":
-                for path in sorted(glob.glob(os.path.join(ROOT, "UNDI", "data", f"{year}-??.json"))):
-                    data = read_json(path, {})
-                    for dnum, rec in sorted(data.get("days", {}).items(), key=lambda kv: int(kv[0])):
-                        day = date(data["year"], data["month"], int(dnum)).isoformat()
-                        rows += [(day, t) for t in rec.get("transactions", [])]
-            else:
-                entries = read_json(ledger_path(section, year), {}).get("entries", [])
-                rows += [(e["date"], e) for e in sorted(entries, key=lambda e: e["date"])]
-        columns = ["id", "date"] + [names.get(f, f) for f in fields]
-        path = os.path.join(args.dir, f"{section}.csv")
-        seen = {}
-        with open(path, "w", encoding="utf-8", newline="") as fh:
-            out = csv.writer(fh)
-            out.writerow(columns)
-            for day, e in rows:
-                seen[day] = seen.get(day, 0) + 1
-                out.writerow([f"{day}#{seen[day]}", day] + ["" if e.get(f) is None else e.get(f) for f in fields])
-        print(path, len(rows), "rows")
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -292,9 +256,6 @@ def main():
     bd = sub.add_parser("build", help="rebuild workbooks from the data files")
     bd.add_argument("sections", nargs="*", metavar="SECTION", help=", ".join(FIELDS) + " (default: all)")
 
-    ex = sub.add_parser("export", help="write dashboard rows")
-    ex.add_argument("dir")
-
     args = ap.parse_args()
     if args.cmd == "add":
         cmd_add(args)
@@ -313,8 +274,6 @@ def main():
         for section in args.sections or FIELDS:
             for year in years_with_data(section) or [datetime.now(TZ).year]:
                 build(section, year)
-    elif args.cmd == "export":
-        cmd_export(args)
 
 
 if __name__ == "__main__":
