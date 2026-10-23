@@ -85,15 +85,15 @@ def build_day_sheet(wb, name, day_data):
 
     ws = wb.create_sheet(name)
     ws.sheet_view.showGridLines = False
-    for col, w in zip("ABCD", (32, 21, 21, 21)):
+    for col, w in zip("ABCDE", (17, 30, 21, 21, 21)):
         ws.column_dimensions[col].width = w
 
     # Row 1: currency banner
-    ws.merge_cells("A1:B1")
-    ws.merge_cells("C1:D1")
+    ws.merge_cells("A1:C1")
+    ws.merge_cells("D1:E1")
     ws["A1"] = "🇦🇪 AED — UAE Dirham"
-    ws["C1"] = "🇮🇳 INR — Indian Rupee"
-    for c in ("A1", "B1", "C1", "D1"):
+    ws["D1"] = "🇮🇳 INR — Indian Rupee"
+    for c in ("A1", "B1", "C1", "D1", "E1"):
         ws[c].fill = fill(NAVY)
         ws[c].font = font(14, True, "FFFFFF")
         ws[c].alignment = Alignment(horizontal="center", vertical="center")
@@ -106,7 +106,7 @@ def build_day_sheet(wb, name, day_data):
     rate_cell.value = day_data.get("rate")
     rate_cell.number_format = RATE_FMT
     ws["D2"] = '=IF(N(C2)>0,"","◄ enter today\'s rate")'
-    for c in ("A2", "B2", "C2", "D2"):
+    for c in ("A2", "B2", "C2", "D2", "E2"):
         ws[c].fill = fill(GREY_FILL)
     ws["A2"].font = font(10, True, NAVY)
     ws["A2"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -126,91 +126,99 @@ def build_day_sheet(wb, name, day_data):
     dv_rate.add("C2")
 
     # Row 3: legend + worked example
-    ws.merge_cells("A3:D3")
-    ws["A3"] = ("Yellow cell and blue figures are yours to type; everything else calculates automatically.\n"
+    ws.merge_cells("A3:E3")
+    ws["A3"] = ("Yellow cell and blue figures are yours to type; everything else calculates automatically. "
+                "A blank Rate uses today's rate above.\n"
                 "Profit / Loss = AED Received × Rate − INR Given   (100 AED at 25, ₹2,400 given → +₹100)")
     ws["A3"].font = font(9, False, NEUTRAL_TXT, italic=True)
     ws["A3"].alignment = Alignment(horizontal="left", vertical="center", indent=1, wrap_text=True)
     ws.row_dimensions[3].height = 28
 
     # Row 4: table header (frozen)
-    for col, label in zip("ABCD", ("Name", "AED Received", "INR Given", "Profit / Loss")):
+    for col, label in zip("ABCDE", ("Rate", "Name", "AED Received", "INR Given", "Profit / Loss")):
         c = ws[f"{col}{HEADER}"]
         c.value = label
         c.font = font(11, True, "FFFFFF")
         c.fill = fill(BLUE)
-        c.alignment = Alignment(horizontal="left" if col == "A" else "right",
+        c.alignment = Alignment(horizontal="left" if col == "B" else "right",
                                 vertical="center", indent=1)
         c.border = BOX
     ws.row_dimensions[HEADER].height = 24
 
-    # Transaction rows: inputs in A:C, formula in D
+    # Transaction rows: inputs in A:D, formula in E. A row's own rate wins over today's rate in C2.
     for i in range(n_rows):
         r = FIRST + i
         t = txns[i] if i < len(txns) else {}
-        ws[f"A{r}"] = t.get("name")
-        ws[f"B{r}"] = t.get("aed")
-        ws[f"C{r}"] = t.get("inr")
-        ws[f"D{r}"] = (f'=IF(AND(ISNUMBER(B{r}),ISNUMBER(C{r}),N($C$2)>0),'
-                       f'ROUND(B{r}*$C$2-C{r},2),"")')
-        ws[f"A{r}"].font = font(11)
-        ws[f"A{r}"].alignment = Alignment(horizontal="left", indent=1)
-        for col, fmt in (("B", AED_FMT), ("C", INR_FMT)):
+        ws[f"A{r}"] = t.get("rate")
+        ws[f"B{r}"] = t.get("name")
+        ws[f"C{r}"] = t.get("aed")
+        ws[f"D{r}"] = t.get("inr")
+        rate = f"IF(ISNUMBER(A{r}),A{r},$C$2)"
+        ws[f"E{r}"] = (f'=IF(AND(ISNUMBER(C{r}),ISNUMBER(D{r}),N({rate})>0),'
+                       f'ROUND(C{r}*{rate}-D{r},2),"")')
+        ws[f"B{r}"].font = font(11)
+        ws[f"B{r}"].alignment = Alignment(horizontal="left", indent=1)
+        for col, fmt in (("A", RATE_FMT), ("C", AED_FMT), ("D", INR_FMT)):
             ws[f"{col}{r}"].number_format = fmt
             ws[f"{col}{r}"].font = font(11, color="0000FF")
             ws[f"{col}{r}"].alignment = Alignment(horizontal="right", readingOrder=1)
-        ws[f"D{r}"].number_format = PL_FMT
-        ws[f"D{r}"].font = font(11, True)
-        ws[f"D{r}"].alignment = Alignment(horizontal="right")
-        for col in "ABCD":
+        ws[f"E{r}"].number_format = PL_FMT
+        ws[f"E{r}"].font = font(11, True)
+        ws[f"E{r}"].alignment = Alignment(horizontal="right")
+        for col in "ABCDE":
             ws[f"{col}{r}"].border = BOX
 
     dv_amt = DataValidation(type="decimal", operator="greaterThanOrEqual", formula1="0",
                             allow_blank=True, showErrorMessage=True, errorTitle="Amount",
                             error="Numbers only, 0 or more")
     ws.add_data_validation(dv_amt)
-    dv_amt.add(f"B{FIRST}:C{LAST}")
+    dv_amt.add(f"C{FIRST}:D{LAST}")
+    dv_row_rate = DataValidation(type="decimal", operator="greaterThan", formula1="0", allow_blank=True,
+                                 showErrorMessage=True, errorTitle="Rate",
+                                 error="Enter a number above 0, or leave blank for today's rate")
+    ws.add_data_validation(dv_row_rate)
+    dv_row_rate.add(f"A{FIRST}:A{LAST}")
 
     # Daily totals
     T = LAST + 2
-    ws.merge_cells(f"A{T}:D{T}")
+    ws.merge_cells(f"A{T}:E{T}")
     ws[f"A{T}"] = "DAILY TOTALS"
     ws[f"A{T}"].font = font(12, True, "FFFFFF")
     ws[f"A{T}"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    for col in "ABCD":
+    for col in "ABCDE":
         ws[f"{col}{T}"].fill = fill(NAVY)
     ws.row_dimensions[T].height = 24
 
     rows = {}
     items = [
-        ("aed", "Total AED Received", f"=SUM({rng('B')})", AED_FMT),
-        ("inr", "Total INR Given", f"=SUM({rng('C')})", INR_FMT),
-        ("profit", "Total Profit", f'=SUMIF({rng("D")},">0")', PL_FMT),
-        ("loss", "Total Loss", f'=SUMIF({rng("D")},"<0")', PL_FMT),
-        ("net", "Net Profit/Loss", f"=SUM({rng('D')})", PL_FMT),
+        ("aed", "Total AED Received", f"=SUM({rng('C')})", AED_FMT),
+        ("inr", "Total INR Given", f"=SUM({rng('D')})", INR_FMT),
+        ("profit", "Total Profit", f'=SUMIF({rng("E")},">0")', PL_FMT),
+        ("loss", "Total Loss", f'=SUMIF({rng("E")},"<0")', PL_FMT),
+        ("net", "Net Profit/Loss", f"=SUM({rng('E')})", PL_FMT),
         ("count", "Number of Transactions",
-         f"=SUMPRODUCT(--((ISNUMBER({rng('B')})+ISNUMBER({rng('C')}))>0))", "0"),
+         f"=SUMPRODUCT(--((ISNUMBER({rng('C')})+ISNUMBER({rng('D')}))>0))", "0"),
     ]
     for k, (key, label, formula, fmt) in enumerate(items, start=1):
         r = T + k
         rows[key] = r
-        ws.merge_cells(f"A{r}:C{r}")
+        ws.merge_cells(f"A{r}:D{r}")
         ws[f"A{r}"] = label
         ws[f"A{r}"].font = font(11, True)
         ws[f"A{r}"].alignment = Alignment(horizontal="right", indent=1)
-        ws[f"D{r}"] = formula
-        ws[f"D{r}"].number_format = fmt
-        ws[f"D{r}"].font = font(11, True)
-        ws[f"D{r}"].alignment = Alignment(horizontal="right", readingOrder=1)
-        for col in "ABCD":
+        ws[f"E{r}"] = formula
+        ws[f"E{r}"].number_format = fmt
+        ws[f"E{r}"].font = font(11, True)
+        ws[f"E{r}"].alignment = Alignment(horizontal="right", readingOrder=1)
+        for col in "ABCDE":
             ws[f"{col}{r}"].border = BOX
-    ws[f"D{rows['profit']}"].font = font(11, True, GREEN_TXT)
-    ws[f"D{rows['loss']}"].font = font(11, True, RED_TXT)
-    for col in "ABCD":
+    ws[f"E{rows['profit']}"].font = font(11, True, GREEN_TXT)
+    ws[f"E{rows['loss']}"].font = font(11, True, RED_TXT)
+    for col in "ABCDE":
         ws[f"{col}{rows['net']}"].border = Border(left=thin, right=thin, bottom=thin,
                                                   top=Side(style="medium", color=NAVY))
-    # the formula is written for D5 and shifts for every other cell in the range
-    add_sign_colouring(ws, f"D{FIRST}:D{LAST} D{rows['net']}", f"$D{FIRST}")
+    # the formula is written for E5 and shifts for every other cell in the range
+    add_sign_colouring(ws, f"E{FIRST}:E{LAST} E{rows['net']}", f"$E{FIRST}")
 
     ws.freeze_panes = f"A{FIRST}"
     ws.print_title_rows = f"1:{HEADER}"
@@ -265,7 +273,7 @@ def build_summary(wb, names, totals_rows, month_name):
         ws[f"A{r}"].alignment = Alignment(horizontal="left", indent=1)
         for col, key, fmt in src:
             c = ws[f"{col}{r}"]
-            c.value = f"='{name}'!D{totals_rows[name][key]}"
+            c.value = f"='{name}'!E{totals_rows[name][key]}"
             c.number_format = fmt
             c.font = font(11, bold=(col == "F"))
             c.alignment = Alignment(horizontal="right", readingOrder=1)
@@ -333,8 +341,10 @@ def main():
     n_days = calendar.monthrange(year, month)[1]
     days = data.get("days", {})
 
+    # a data file that names its year gets a per-year file name, so months don't collide across years
+    label = f"{mon_abbr} {year}" if data.get("year") else mon_abbr
     out = args.out or os.path.join(os.path.dirname(__file__), "output",
-                                   f"AED-INR Exchange Tracker - {mon_abbr}.xlsx")
+                                   f"AED-INR Exchange Tracker - {label}.xlsx")
     os.makedirs(os.path.dirname(out), exist_ok=True)
 
     wb = Workbook()

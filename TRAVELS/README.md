@@ -8,6 +8,10 @@ Times New Roman, navy title band, slate header row, striped rows, teal divider, 
   and 50 blank rows. At the bottom: `TOTAL ENTRIES OF <MONTH>` and `TOTAL CHARGED OF <MONTH>` (the month's sum).
 * Fill in Date (as text, `01 Jan 2026`), Name, Service and Charged. Sl No, the totals and the Summary are formulas.
 
+* Daily entries: `python daily.py add travels --name … --service … --charged …` from the repo root stores
+  them in `data/<year>.json` and rebuilds the workbook and its PDF, with each entry on its month's sheet in
+  date order.
+
 Rebuild for another year or more rows:
 
     python build_workbook.py --year 2027 --rows 80
